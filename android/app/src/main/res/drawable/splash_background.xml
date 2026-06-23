@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <color android:color="@color/seadrop_bg" />
+    </item>
+    <item android:gravity="center">
+        <vector
+            android:width="120dp"
+            android:height="120dp"
+            android:viewportWidth="120"
+            android:viewportHeight="120">
+            <path
+                android:fillColor="@color/seadrop_primary"
+                android:pathData="M60,10 C32.4,10 10,32.4 10,60 C10,87.6 32.4,110 60,110 C87.6,110 110,87.6 110,60 C110,32.4 87.6,10 60,10 Z" />
+            <path
+                android:fillColor="@color/seadrop_on_primary"
+                android:pathData="M60,25 L60,95 M25,60 L95,60"
+                android:strokeWidth="8"
+                android:strokeLineCap="round" />
+        </vector>
+    </item>
+</layer-list>

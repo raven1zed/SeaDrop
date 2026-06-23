@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SeaDrop</string>
+    <string name="app_tagline">Seamless Drop</string>
+
+    <!-- Status -->
+    <string name="status_initializing">Initializing…</string>
+    <string name="status_connecting">Connecting to SeaDrop…</string>
+    <string name="status_connected">Connected</string>
+    <string name="status_disconnected">Disconnected</string>
+    <string name="status_sending">Sending…</string>
+    <string name="status_receiving">Receiving…</string>
+    <string name="status_ready">Ready</string>
+
+    <!-- Labels -->
+    <string name="label_connection_status">Connection Status</string>
+    <string name="label_seadrop_device">SeaDrop Device</string>
+    <string name="label_your_device_name">Your Device Name</string>
+    <string name="label_registration">SeaDrop Registration</string>
+
+    <!-- Hints -->
+    <string name="hint_device_name">Enter your device name</string>
+
+    <!-- Buttons -->
+    <string name="btn_save_name">Save Device Name</string>
+    <string name="btn_register">Register SeaDrop</string>
+    <string name="btn_reregister">Re-register</string>
+
+    <!-- Registration -->
+    <string name="registration_instructions">Power on SeaDrop. Screen should show REGISTRATION MODE.\nEnter the SSID shown on the device screen.</string>
+    <string name="requires_permissions">Requires: Location, Nearby WiFi, Notifications permissions</string>
+
+    <!-- Not registered -->
+    <string name="not_registered">Not registered</string>
+
+    <string name="registration_success">Registration successful!</string>
+
+    <!-- Error messages -->
+    <string name="error_enter_ssid">Enter the SeaDrop SSID shown on the device</string>
+    <string name="error_enter_device_name">Enter your device name</string>
+    <string name="error_permissions_required">Permissions required for SeaDrop to work</string>
+    <string name="error_registration_failed">Registration failed: %s</string>
+
+    <!-- Share -->
+    <string name="share_sending">SeaDrop: sending…</string>
+    <string name="share_sending_multiple">SeaDrop: sending %d files…</string>
+    <string name="share_failed">SeaDrop: failed to read file</string>
+    <string name="share_not_setup">SeaDrop not set up. Open the SeaDrop app first.</string>
+</resources>

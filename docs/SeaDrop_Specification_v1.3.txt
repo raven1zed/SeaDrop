@@ -1,0 +1,358 @@
+SeaDrop
+Specification & Implementation Document
+Version 1.3   --   June 2026
+Changes from v1.2: Windows Mobile Hotspot architecture replaces WiFi Direct. NCSI spoofing on ESP32 firmware for both Windows and Android internet detection. GPIO 15 TFT_CS conflict resolved. eFuse burn mandatory step. GPIO 2 pull-up via firmware. Samsung Galaxy A15 OneUI 8 captive portal behavior confirmed. Bundled app installer requirements for both platforms. Setup wizard verification gate added.
+--------------------------------------------------------------------------------
+
+SeaDrop is a portable, pocket-sized file transfer device powered by an ESP32-WROOM-32 microcontroller with an SPI TFT touchscreen and microSD slot. It creates its own WiFi access point, enabling an Android phone and a Windows laptop on completely separate networks to transfer files between each other without either device switching its primary internet connection or interrupting it in any way  --  at any point, including during active transfer.
+SeaDrop is not a file transfer app. It is permanent wireless infrastructure you carry in your pocket. The line between both devices is always open. A transfer is just what happens when you use it.
+1. System Overview
+--------------------------------------------------------------------------------
+
+1.1 Core Design Philosophy
+SeaDrop's design is governed by one principle: the user should never think about the transfer mechanism. They have a file. They want it on the other device. Three taps from any context and it is done. SeaDrop handles everything else invisibly.
+This is the gap AirDrop fills that LocalSend, KDE Connect, and every wireless transfer app fails to close. Those apps require both devices on the same network with the user actively managing a transfer UI. SeaDrop's interaction cost after one-time setup is: share from native context, tap destination, done.
+
+1.2 Behavioral Requirements
+ Neither device ever switches its primary WiFi or loses internet during a transfer  --  not during setup, not during transfer, not ever
+ Neither user opens a transfer UI unless they choose to  --  share sheet and right-click context menu are the only required entry points
+ SeaDrop is detected automatically when powered on  --  no manual reconnect after first setup
+ The TCP connection is persistent  --  transfers start instantly because the line is already open
+ After SeaDrop power cycles, both apps reconnect automatically within seconds  --  no user action
+ After phone or laptop reboot, both apps reconnect on next boot  --  no user action
+ One-time setup only: install app, complete first-launch wizard, done. No USB cable required for users
+
+1.3 The Windows Single-Radio Problem  --  Solved
+Standard Windows WiFi adapters  --  including the Realtek 8852BE-VT in the HP Victus (the reference hardware for this project)  --  report zero concurrent channels. This means connecting to a second WiFi AP drops the primary internet connection. This is a silicon-level constraint, not a driver issue.
+The solution: invert the AP role. Instead of the laptop connecting to SeaDrop's AP, the Windows app programmatically creates a Mobile Hotspot with a fixed SSID and password known to the ESP32. The ESP32 connects to the laptop's hotspot in STA mode. The laptop stays on its home WiFi for internet. Mobile Hotspot and infrastructure WiFi coexist on the same single radio via the NDIS 'Infrastructure Station + Software AP' configuration  --  the same mechanism Windows uses for everyday Mobile Hotspot sharing. This works on the Realtek 8852BE and is confirmed behavior on this chip.
+The ESP32 then bridges Android (on its own SoftAP) and Windows (via STA connection to the laptop hotspot) through the SeaDrop relay. Both platforms keep their internet. Neither touches a WiFi setting.
+
+1.4 Architecture
+   ┌────────────────────────────────────────────────────────────┐
+   │                         SeaDrop                            │
+   │  ESP32-WROOM-32   --   APSTA Mode                             │
+   │                                                             │
+   │  SoftAP (Android) ──► TCP :4242 ──► Streaming Relay        │
+   │  STA (Windows Hotspot) ─────────────► SDMMC Buffer (offline│
+   │  DNS Server ──► NCSI Spoof (Windows + Android)             │
+   │  HTTP Server ──► connecttest.txt + generate_204            │
+   │  BLE Advertise UUID 0xFEAD                                  │
+   │  SPI ILI9341 TFT + XPT2046 Touch                           │
+   │  WiFi RSSI per client ──► Proximity Trust Zones             │
+   └──────────┬────────────────────────────┬────────────────────┘
+              │ SoftAP (192.168.4.x)        │ STA --> Windows Hotspot
+     ┌────────┴──────────┐        ┌─────────┴────────────┐
+     │   Android App     │        │    Windows App        │
+     │ WifiNetworkSugg.  │        │ NetworkOperatorTether │
+     │ bindProcessToNet  │        │ Mobile Hotspot API    │
+     │ Foreground Svc    │        │ System Tray Service   │
+     │ Share Sheet       │        │ IExplorerCommand      │
+     │ Outbound Queue    │        │ Outbound Queue        │
+     │ Internet intact   │        │ Internet intact       │
+     └───────────────────┘        └──────────────────────┘
+
+1.5 Why Neither Device Loses Internet
+Android: WifiNetworkSuggestion adds SeaDrop's SoftAP as a secondary OS-managed network. Android detects the AP has no internet via captive portal probe  --  but the ESP32 NCSI spoof responds correctly, making Android believe the network has internet. bindProcessToNetwork() routes only the SeaDrop app TCP socket through the SeaDrop AP. The phone's original mobile data or WiFi is completely untouched for all other traffic.
+Windows: The Windows app creates a Mobile Hotspot with a known SSID/password via NetworkOperatorTetheringManager API. The laptop stays connected to the home router on its physical WiFi radio. Mobile Hotspot runs concurrently via the NDIS Infrastructure Station + Software AP configuration  --  one radio, two concurrent network roles. The ESP32 connects to the hotspot in STA mode. No routing table manipulation. No WiFi Direct dependency. No concurrent channel requirement.
+2. User Experience Requirements
+--------------------------------------------------------------------------------
+
+2.1 The AirDrop Interaction Model
+AirDrop's value is the interaction surface. The user shares from wherever they already are and the destination appears in the native share sheet. SeaDrop replicates this on both platforms. The app window should rarely appear during normal use.
+
+2.2 Android UX
+ SeaDrop registers as a system share target: 'SeaDrop' appears in the share sheet from any app
+ Sharing triggers transfer immediately via background foreground service  --  app window never opens
+ Persistent notification shows connection state and live transfer progress
+ Incoming files trigger system notification with filename, size, sender name, and inline Accept / Decline actions
+ If SeaDrop is off when share is initiated: notification reads 'Transfer queued  --  waiting for SeaDrop'. Sends automatically when SeaDrop comes online. User cancels from notification explicitly  --  no silent 60-second cancellation
+ Queued transfers persist across reboots via Room database
+ Accepted files save to Downloads/SeaDrop/ by default, configurable
+
+2.3 Windows UX
+ Right-click any file or folder in Explorer: 'Send via SeaDrop' at the top level via IExplorerCommand  --  not in Show More Options submenu
+ Drag file onto SeaDrop system tray icon to send
+ Tray icon states: grey = not found, amber = connecting, green = live and ready
+ Toast notification for incoming files with Accept / Decline inline actions
+ Optional hotkey (default Ctrl+Shift+D) sends clipboard content  --  text or image  --  to other device
+ Queued outbound transfers shown in tray tooltip: 'Waiting to send: [filename]'
+ App window is settings-only  --  never opens automatically
+ Mobile Hotspot is enabled silently at app startup and disabled on app close  --  user never sees it
+
+2.4 RSSI-Based Proximity Trust Zones
+SeaDrop uses WiFi RSSI to determine proximity trust tier per connected device. The ESP32 reads RSSI directly from the SoftAP station table for Android, and from the STA connection stats for Windows. RSSI is averaged over 5 samples taken every 5 seconds. Tier change requires 3 consecutive readings in the new tier before committing.
+
+Trust TierWiFi RSSIAuto-Confirm BehaviorCloseAbove -55 dBmAuto-confirms after 3s. Cancel button visible on TFT. Same-desk proximity.Medium-55 to -70 dBmManual tap required on TFT. Same-room proximity.Far / UncertainBelow -70 dBmManual tap required. TFT shows: 'Device signal weak  --  confirm?'
+RSSI tiers are a UX convenience layer only  --  not a security primitive. The WPA2 password and auth token are the hard security gates. Documented as such in Section 9.
+
+2.5 ESP32 TFT State Machine
+STATE_IDLESeaDrop logo, SSID, connected device count (0/1/2), uptime, signal bars grayedSTATE_CONNECTEDBoth device names + RSSI signal bars. Live proximity tier per deviceSTATE_CONFIRMFilename, size, sender, receiver, RSSI tier indicator. Auto-confirm countdown if Close tier. Manual tap if Medium or FarSTATE_TRANSFERProgress bar, filename, bytes/total, live KB/s, STREAM or BUFFER mode indicatorSTATE_DONEDone + filename + elapsed time. Returns to CONNECTED after 3sSTATE_ERRORSD_FULL / TIMEOUT / CHECKSUM_FAIL / REJECTED / PEER_OFFLINE. Returns after 5s3. Hardware
+--------------------------------------------------------------------------------
+
+3.1 Components
+MicrocontrollerESP32-WROOM-32 (XX5R69, 38-pin DevKit)USB-UARTCP2102  --  developer flashing onlyDisplayILI9341 2.4" TFT  --  4-wire SPI (NOT parallel)TouchXPT2046 resistive  --  SPI, shares VSPI busStoragemicroSD  --  SDMMC 4-bit interface (NOT SPI)PowerUSB Micro-B, 5V from USB power source or powerbank
+3.2 Critical Hardware Decisions
+8-bit parallel display is abandoned. It requires 13 GPIO pins including three strapping pins (GPIO 2, 12, 15), causes guaranteed boot failures, and offers no real speed advantage over hardware SPI with DMA on ESP32. SPI ILI9341 at 40MHz replaces it.
+SPI microSD via SD.h is abandoned. Real-world throughput: 0.2 - 0.5 MB/s. A 100MB file would take 3 - 8 minutes. SDMMC 4-bit replaces it: 2.5 - 10 MB/s sustained write. The SPI display pivot frees exactly the GPIO pins required for SDMMC 4-bit.
+
+3.3 Strapping Pin Safety  --  Full Analysis
+GPIOBoot FunctionSeaDrop Assignment and MitigationGPIO 0Download mode (LOW=flash, HIGH=run)Unassigned. Float or 10k pull-up. Safe.GPIO 2Download mode secondary (must be LOW at boot)SDMMC D0. No external pull-up  --  would block USB flashing. gpio_pullup_en(GPIO_NUM_2) in firmware after boot, before SDMMC mount.GPIO 5SDIO timing (must be HIGH at boot)SDMMC D3. 10k pull-up to 3.3V. Safe.GPIO 12Flash LDO voltage (LOW=3.3V, HIGH=1.8V)SDMMC D2. eFuse must be burned before use  --  see §3.4. After burn: 10k pull-up safe.GPIO 15SDIO timing + boot log (must be HIGH at boot)TFT_CS only. NOT shared with SDMMC_CMD. v1.2 fatal conflict resolved. 10k pull-up.
+3.4 Mandatory eFuse Burn  --  Day 1 Step 0
+GPIO 12 is SDMMC D2. The SD specification requires a 10k pull-up on all data lines. But GPIO 12 HIGH at boot tells the ESP32 to set flash voltage to 1.8V  --  the WROOM-32 uses 3.3V flash, causing an immediate boot loop. A pull-down resistor fighting the SD pull-up causes CRC errors at speed.
+The permanent fix: burn the eFuses to lock VDD_SDIO to 3.3V, making the ESP32 ignore GPIO 12 at boot forever. This is an irreversible one-time operation that must be done before any firmware is flashed:
+   pip install esptool
+   espefuse.py --port COM_PORT set_flash_voltage 3.3V
+   # Confirm when prompted  --  this cannot be undone
+After the eFuse burn, GPIO 12 can safely use the standard 10k pull-up required by the SD specification. SDMMC operates correctly at full speed without boot conflicts.
+
+3.5 Pin Map  --  SPI Display + SDMMC 4-bit
+Zero strapping pin conflicts. TFT_CS on GPIO 22  --  not GPIO 15, resolving the v1.2 fatal shared-pin conflict with SDMMC_CMD.
+
+Pin/SignalESP32 GPIONotesTFT_CSGPIO 22Display chip select  --  safe, not a strapping pin, not SDMMCTFT_DCGPIO 27Display data/command  --  safeTFT_RSTGPIO 26Display reset  --  safeTFT_MOSIGPIO 23VSPI MOSI  --  hardware SPI busTFT_CLKGPIO 18VSPI clock  --  hardware SPI busTFT_MISOGPIO 19VSPI MISO  --  hardware SPI busT_CSGPIO 33XPT2046 touch chip select  --  shares VSPI busT_IRQGPIO 32Touch interrupt  --  reduces display_task polling loadSDMMC_CLKGPIO 14SDMMC clock  --  dedicated SDMMC peripheralSDMMC_CMDGPIO 15SDMMC command  --  10k pull-up. NOT shared with displaySDMMC_D0GPIO 2SDMMC data 0  --  NO external pull-up. gpio_pullup_en() in firmware after bootSDMMC_D1GPIO 4SDMMC data 1  --  10k pull-upSDMMC_D2GPIO 12SDMMC data 2  --  10k pull-up ONLY after eFuse burn. See §3.4SDMMC_D3GPIO 13SDMMC data 3  --  10k pull-up5VVINUSB 5V  --  NOT 3V3GNDGNDCommon ground
+3.6 TFT_eSPI Configuration  --  SPI Mode
+   #define ILI9341_DRIVER
+   #define TFT_CS   22   // Changed from 15 in v1.2
+   #define TFT_DC   27
+   #define TFT_RST  26
+   #define TFT_MOSI 23
+   #define TFT_CLK  18
+   #define TFT_MISO 19
+   #define TOUCH_CS 33
+   #define SPI_FREQUENCY       40000000
+   #define SPI_TOUCH_FREQUENCY  2500000
+
+3.7 SDMMC 4-bit Init with GPIO 2 Firmware Pull-up
+   // In setup(), before SD mount:
+   gpio_pullup_en(GPIO_NUM_2);   // D0  --  safe after boot
+   gpio_pullup_en(GPIO_NUM_4);   // D1
+   gpio_pullup_en(GPIO_NUM_12);  // D2  --  only safe after eFuse burn
+   gpio_pullup_en(GPIO_NUM_13);  // D3
+   gpio_pullup_en(GPIO_NUM_15);  // CMD
+   
+   sdmmc_host_t host = SDMMC_HOST_DEFAULT();
+   host.max_freq_khz = SDMMC_FREQ_HIGHSPEED;
+   sdmmc_slot_config_t slot = SDMMC_SLOT_CONFIG_DEFAULT();
+   slot.width = 4;
+   // Mount filesystem after pull-ups enabled
+4. ESP32 Firmware
+--------------------------------------------------------------------------------
+
+4.1 Stack
+FrameworkArduino core for ESP32DisplayTFT_eSPI  --  hardware SPI ILI9341 with DMATouchXPT2046_Touchscreen  --  shared VSPI busSDESP-IDF SDMMC host driver  --  4-bit modeBLENimBLE-ArduinoWiFiWiFi.h  --  WIFI_AP_STA modeDNSDNSServer (Arduino ESP32 core)HTTPESPAsyncWebServer  --  NCSI spoof responderNVSPreferences.hRTOSFreeRTOS
+4.2 WiFi APSTA Mode
+The ESP32 runs in WIFI_AP_STA mode simultaneously:
+AP interface: Hosts SeaDrop SoftAP for Android client. SSID: SeaDrop-XXXXXX. WPA2. max_connection=3.
+STA interface: Connects to Windows Mobile Hotspot. SSID and password stored in NVS from registration. Auto-reconnects on boot.
+   WiFi.mode(WIFI_AP_STA);
+   WiFi.softAP(SEADROP_SSID, SEADROP_PASS, channel, false, 3);
+   WiFi.begin(HOTSPOT_SSID, HOTSPOT_PASS); // Windows hotspot
+Channel matching: the Windows app reads the current home WiFi channel and passes it to the ESP32 via the first STATUS exchange. If the hotspot channel differs, the ESP32 restarts its SoftAP on the matching channel to minimize radio switching overhead on the Realtek adapter.
+
+4.3 NCSI Spoofing  --  The Internet Trick
+When any device connects to the ESP32 AP or when ESP32 connects to the Windows hotspot, the OS sends connectivity probes to verify internet access. Without a response, the OS marks the network as 'No internet' and may deprioritize or drop it. The ESP32 intercepts these probes and responds correctly, making both OS platforms believe the SeaDrop network has internet.
+Implementation uses DNSServer to redirect all DNS queries to the ESP32's own IP, and ESPAsyncWebServer to serve the correct responses:
+   // DNS: redirect everything to 192.168.4.1
+   dnsServer.start(53, "*", IPAddress(192,168,4,1));
+   
+   // Windows NCSI probes
+   // www.msftconnecttest.com/connecttest.txt
+   server.on("/connecttest.txt", HTTP_GET, [](AsyncWebServerRequest *req){
+       req->send(200, "text/plain", "Microsoft Connect Test");
+   });
+   // www.msftconnecttest.com/redirect
+   server.on("/redirect", HTTP_GET, [](AsyncWebServerRequest *req){
+       req->redirect("http://192.168.4.1");
+   });
+   
+   // Android NCSI probes
+   // connectivitycheck.gstatic.com/generate_204
+   // clients3.google.com/generate_204
+   server.on("/generate_204", HTTP_GET, [](AsyncWebServerRequest *req){
+       req->send(204);
+   });
+   
+   // Apple captive portal (future iOS support)
+   server.on("/hotspot-detect.html", HTTP_GET, [](AsyncWebServerRequest *req){
+       req->send(200, "text/html",
+           "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>");
+   });
+
+4.4 Samsung Galaxy A15 OneUI 8  --  Confirmed Compatible
+The Samsung Galaxy A15 LTE running OneUI 8 (Android 16) uses standard Android NCSI behavior: HTTP GET to connectivitycheck.gstatic.com/generate_204, expects HTTP 204 response. The old Samsung S7 hardcoded DNS workaround (setting AP IP to 8.8.8.8) documented in pre-2019 repos is not required on OneUI 6 and later. The standard generate_204 --> 204 response from the ESP32 is sufficient.
+NCSI on modern OneUI caches positive results per network (by BSSID). Once the probe succeeds on first connection, Android considers the network internet-capable for the session. The spoof must be running before the phone connects  --  the ESP32 starts DNSServer and ESPAsyncWebServer before activating SoftAP.
+
+4.5 NCSI Cache Warning
+Windows NCSI caches negative results per network BSSID. If Windows detects no internet on the SeaDrop hotspot before the ESP32 NCSI spoof is running, it will not retest that network for an extended period. Mitigation: the ESP32 starts the DNS server and HTTP responder in setup() before WiFi.softAP() is called. The spoof is live before any client can connect.
+
+4.6 Streaming Relay vs SD Buffer
+Mode 1: Streaming Relay: Both peers connected. Bytes flow directly from sender TCP socket to receiver TCP socket via in-memory ring buffer. SD not touched. Throughput approaches WiFi radio ceiling.
+Mode 2: SD Buffer: Receiver offline. File written to SDMMC. Pushed to receiver on reconnect via NOTIFY/PULL. SD wear only in this mode.
+
+4.7 RSSI Proximity Trust
+   wifi_sta_list_t sta_list;
+   esp_wifi_ap_get_sta_list(&sta_list);
+   int8_t rssi = sta_list.sta[i].rssi; // Android client via SoftAP
+   // Windows RSSI: read from STA connection stats
+   wifi_ap_record_t ap_info;
+   esp_wifi_sta_get_ap_info(&ap_info);
+   int8_t win_rssi = ap_info.rssi; // Windows via STA-->hotspot
+Rolling average over 5 samples, 3 consecutive readings required before tier change commits. Tier displayed as signal bars on TFT per device.
+
+4.8 Registration Mode
+Active on first boot when NVS tokens are empty. Re-entered by holding BOOT button 3 seconds. Times out after 5 minutes. Partial registrations cleared on timeout. REG commands rejected outside Registration Mode with REJECT REG_CLOSED. TFT shows countdown timer and slot fill status.
+
+4.9 FreeRTOS Tasks
+tcp_server_taskCore 0  --  TCP server :4242, session table, streaming relay, SDMMC coordination, RSSI reads, channel matchingble_adv_taskCore 0  --  BLE advertisement UUID 0xFEAD, reg_mode flagncsi_taskCore 0  --  DNSServer loop + ESPAsyncWebServer NCSI responderdisplay_taskCore 1  --  TFT_eSPI rendering, XPT2046 touch, UI state machinesd_buffer_taskCore 1  --  SDMMC writes/reads for offline-receiver mode via queue
+4.10 NVS Storage
+seadrop/ssidGenerated SoftAP SSID  --  set first boot, never changesseadrop/passSoftAP WPA2 passwordseadrop/hsssidWindows hotspot SSID  --  set during Windows registrationseadrop/hspassWindows hotspot password  --  set during Windows registrationseadrop/devAAndroid device nameseadrop/devWWindows device nameseadrop/tokA16-byte Android auth tokenseadrop/tokW16-byte Windows auth tokenseadrop/regdoneRegistration complete flag5. SeaDrop Transfer Protocol (STP) v1.3
+--------------------------------------------------------------------------------
+
+Minimal persistent TCP protocol over port 4242. All commands are newline-terminated ASCII. Binary payloads follow immediately with byte length declared in the command. Connection is permanent  --  commands flow over the same open socket indefinitely.
+
+5.1 Commands
+HELLO <type> <name> <token>Client greeting. type = ANDROID or WINDOWSHELLO_ACK <session_id>ESP32 assigns session IDPINGKeepalive every 10s on idlePONGESP32 responseCHANNEL <n>Windows app reports current home WiFi channel. ESP32 matches SoftAP channel.SEND <file> <bytes> <crc32> <mode>Client send intent. mode = STREAM or BUFFERSEND_ACK <mode>ESP32 confirms modeSEND_DONEClient end of streamNOTIFY <file> <bytes>ESP32 to receiver: file ready on SDPULL <file>Receiver requests filePULL_DATA <bytes>ESP32 streams filePULL_DONEEnd of streamACKGeneric acknowledgementREJECT <reason>AUTH_FAIL / SD_FULL / NO_PEER / BUSY / CHECKSUM_FAIL / REG_CLOSEDCANCELEither party cancels transferSTATUSClient requests session stateSTATUS_RESP <state> <peer> <mode>ESP32 responseREG <type> <name> <hotspot_ssid> <hotspot_pass>Registration. Windows includes hotspot credentials. Only in Registration Mode.TOKEN <hex>ESP32 response  --  16-byte token
+5.2 Streaming Relay Sequence
+   Android                   ESP32                    Windows
+      |                        |                         |
+      |-- HELLO ANDROID ... -->|<-- HELLO WINDOWS ... ---|
+      |<- HELLO_ACK sid_1 -----|--- HELLO_ACK sid_2 ---->|
+      |                        |<-- CHANNEL 6 -----------|
+      |-- PING ... <---------> ... PONG (every 10s)      |
+      | [user shares file]     |                         |
+      |-- SEND file.mp4 STREAM>|                         |
+      |<- SEND_ACK STREAM -----|                         |
+      |-- [binary stream] ---->|-- [relay to Windows] -->|
+      |-- SEND_DONE ---------->|--- ACK to both -------->|
+      | [line stays open]      | [line stays open]       |
+
+5.3 Power Cycle Reconnect
+SeaDrop powers off: both clients detect dead socket via PING failure or SO_KEEPALIVE timeout. Reconnect loop: 3 second backoff, retry indefinitely. SeaDrop powers on: SoftAP up in ~2 seconds. Android reconnects via WifiNetworkSuggestion. ESP32 STA reconnects to Windows hotspot. Windows TCP client reconnects. Both HELLO handshakes complete. Line live. End to end: under 10 seconds.
+6. Android Application
+--------------------------------------------------------------------------------
+
+6.1 Stack
+LanguageKotlinMin SDKAPI 29 (Android 10)Target SDKAPI 36 (Android 16)WiFiWifiNetworkSuggestion  --  OS-managed persistent auto-connectNetwork bindingConnectivityManager.bindProcessToNetwork()BackgroundForeground Service  --  FOREGROUND_SERVICE_TYPE_DATA_SYNCBootRECEIVE_BOOT_COMPLETED broadcast receiverBLEBluetoothLeScanner  --  UUID 0xFEADTCPJava Socket + Kotlin coroutines  --  persistentShare targetDirect Share / ChooserTargetServiceFilesStorage Access FrameworkToken storageEncryptedSharedPreferences (AES-256)QueueRoom database  --  persistent outbound transfer queueLocksWIFI_MODE_FULL_HIGH_PERF + WakeLock
+6.2 Permissions
+   ACCESS_FINE_LOCATION
+   CHANGE_WIFI_STATE  /  ACCESS_WIFI_STATE
+   BLUETOOTH_SCAN  /  BLUETOOTH_CONNECT     (API 31+)
+   NEARBY_WIFI_DEVICES                      (API 33+)
+   FOREGROUND_SERVICE
+   RECEIVE_BOOT_COMPLETED
+   INTERNET  /  WAKE_LOCK
+   REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+
+6.3 WifiNetworkSuggestion
+   val suggestion = WifiNetworkSuggestion.Builder()
+       .setSsid(seadropSsid)
+       .setWpa2Passphrase(seadropPass)
+       .setIsAppInteractionRequired(false)
+       .setPriority(999)
+       .build()
+   wifiManager.addNetworkSuggestions(listOf(suggestion))
+One-time system approval on first call. OS connects automatically across reboots. If user manually disconnects via system WiFi picker, OS blacklists the suggestion for up to 24 hours  --  not just that session. App detects this via NetworkCallback and shows notification: 'SeaDrop disconnected  --  tap once to reconnect.' Tapping triggers manual connection which clears the block.
+
+6.4 Persistent Connection Loop
+   while (true) {
+       try {
+           waitForSeaDropNetwork()
+           socket = Socket().apply {
+               keepAlive = true
+               soTimeout = 15000
+               connect(InetSocketAddress("192.168.4.1", 4242), 5000)
+           }
+           sendHello()
+           checkOutboundQueue()
+           readLoop(socket!!)
+       } catch (e: IOException) {
+           socket?.close(); socket = null
+           delay(3000)
+       }
+   }
+
+6.5 First-Launch Registration Wizard
+ Install app. Open app. First-launch wizard starts.
+ Wizard: 'Power on SeaDrop. Screen should show REGISTRATION MODE.'
+ Wizard: 'Enter the SSID and password shown on the SeaDrop screen.'
+ User enters credentials. App connects to SeaDrop AP  --  one-time manual WiFi step during setup only.
+ App sends REG ANDROID [device name]. ESP32 responds TOKEN [hex]. Token stored in EncryptedSharedPreferences.
+ App calls addNetworkSuggestions. System shows one-time approval dialog. User taps Allow.
+ App requests battery optimization exemption. User taps Allow.
+ Wizard: 'Android registered. Now install SeaDrop on your Windows laptop.' Done.
+7. Windows Application
+--------------------------------------------------------------------------------
+
+7.1 Stack
+LanguageC# (.NET 8)UIWinUI 3  --  system tray only, settings window on demandMobile Hotspot APIWindows.Networking.NetworkOperators.NetworkOperatorTetheringManagerBLEWindows.Devices.Bluetooth.AdvertisementTCPSystem.Net.Sockets  --  persistent connectionShell extensionIExplorerCommand  --  first-level Windows 11 context menuBootMSIX startup task via Task SchedulerToken storageWindows Credential Manager (DPAPI)QueueSQLite  --  persistent outbound transfer queueMin OSWindows 10 build 19041InstallerMSIX  --  bundles .NET 8 runtime + Windows App SDK
+7.2 Mobile Hotspot  --  Internet Intact
+The Windows app programmatically creates a Mobile Hotspot with a fixed SeaDrop-specific SSID and password via NetworkOperatorTetheringManager. The laptop stays on home WiFi for internet. Mobile Hotspot runs concurrently via NDIS Infrastructure Station + Software AP  --  confirmed working on Realtek 8852BE-VT.
+The hotspot SSID and password are generated during registration and stored in both the Windows app (Credential Manager) and ESP32 NVS. They are fixed values  --  the hotspot is always the same network. The ESP32 auto-connects to it in STA mode on every boot.
+   var tetheringManager = NetworkOperatorTetheringManager
+       .CreateFromConnectionProfile(internetProfile);
+   
+   var config = new NetworkOperatorTetheringAccessPointConfiguration();
+   config.Ssid = "SeaDrop-W-XXXXXX"; // fixed, from registration
+   config.Passphrase = storedHotspotPass;
+   config.Band = TetheringWiFiBand.TwoPointFourGigahertz;
+   
+   await tetheringManager.ConfigureAccessPointAsync(config);
+   await tetheringManager.StartTetheringAsync();
+Hotspot starts silently at app launch. Stops on app close. User never sees it. Mobile Hotspot settings in Windows Settings UI are not affected  --  the app manages its own hotspot profile separately.
+
+7.3 BLE Watcher
+   var watcher = new BluetoothLEAdvertisementWatcher();
+   watcher.AdvertisementFilter.Advertisement
+       .ServiceUuids.Add(Guid.Parse(
+           "0000FEAD-0000-1000-8000-00805F9B34FB"));
+   watcher.Received += OnSeaDropDetected;
+   watcher.Start();
+On SeaDrop BLE detection: hotspot is already running. ESP32 connects to it in STA mode automatically. TCP connection from ESP32 arrives at Windows app listener on the hotspot network interface. HELLO handshake completes. Line live.
+
+7.4 MSIX Bundled Dependencies
+ .NET 8 Desktop Runtime  --  bundled in MSIX
+ Windows App SDK runtime  --  bundled in MSIX
+ IExplorerCommand shell extension  --  registered by MSIX installer
+ Startup task  --  registered by MSIX installer via Task Scheduler
+ NetworkOperatorTetheringManager capability declared in app manifest
+ wlanapi.dll access for channel detection  --  declared capability
+Single MSIX install covers all dependencies. User runs installer, clicks through one UAC prompt, done. No separate runtime installs. No manual driver configuration.
+
+7.5 First-Launch Registration Wizard
+ Install MSIX. Open app. First-launch wizard starts. App starts Mobile Hotspot silently.
+ Wizard: 'Power on SeaDrop. Screen should show REGISTRATION MODE.'
+ Wizard: 'Enter SeaDrop SSID and password shown on screen.'
+ App attempts connection via standard WiFi to SeaDrop SoftAP during registration only.
+ App sends REG WINDOWS [device name] [hotspot_ssid] [hotspot_pass]. ESP32 stores hotspot credentials in NVS, responds TOKEN [hex]. Token stored in Credential Manager.
+ App disconnects from SeaDrop SoftAP. ESP32 now connects to the Windows hotspot in STA mode automatically.
+ App verifies TCP connection arrives from ESP32 on hotspot interface. Confirms internet still live on primary WiFi.
+ Wizard shows NCSI verification: 'Confirming internet is intact...'  --  checks laptop internet by pinging an external address. If pass: 'Setup complete.' If fail: shows diagnostic.
+ Done. Hotspot stays running. ESP32 auto-connects on every subsequent boot.
+8. Setup Verification Gate
+--------------------------------------------------------------------------------
+
+Both platform wizards include a verification step before declaring setup complete. This catches NCSI spoof failures, hotspot compatibility issues, and driver problems on the user's specific hardware before they become invisible runtime failures.
+
+8.1 Android Verification
+ App connects to SeaDrop AP during registration
+ App checks Android's network capabilities for the SeaDrop network  --  verifies NET_CAPABILITY_INTERNET is reported
+ If NCSI spoof worked: capability is present, wizard proceeds
+ If not: wizard shows 'Network check failed  --  SeaDrop may not stay connected on this device' with diagnostic steps
+
+8.2 Windows Verification
+ After ESP32 connects to Windows hotspot, app checks primary WiFi internet by making an HTTP request to a known external address
+ If internet still live: pass. Wizard shows 'Internet confirmed intact.'
+ If internet dropped: fail. Wizard shows exact failure mode and stops setup
+ App also reads current WiFi channel and sends CHANNEL command to ESP32 for SoftAP channel matching
+9. Security Model
+--------------------------------------------------------------------------------
+
+Auth tokens16-byte random tokens in NVS. Required on every HELLO. Unknown tokens dropped immediately.SoftAP passwordWPA2 shown on TFT during Registration Mode only. Prevents random AP joins.Hotspot passwordGenerated randomly during Windows registration. Stored in NVS and Windows Credential Manager. Not user-visible after setup.Registration Mode gateREG commands only in Registration Mode. 5-minute timeout. Partial registrations cleared on timeout.Physical proximityBLE ~10m range. Transfers are proximity-gated by radio physics.RSSI trust tiersWiFi RSSI gates auto-confirm behavior. UX convenience layer only  --  not a cryptographic boundary.Transfer consentReceiver accepts every incoming file. Far-tier requires explicit TFT tap. Close-tier auto-confirms after 3s with cancel visible.No cloudNo server, no relay, no internet routing. Files never leave the local SeaDrop network.Token storageAndroid: EncryptedSharedPreferences AES-256. Windows: Credential Manager DPAPI.NCSI spoof scopeNCSI spoofing only serves connectivity probe URLs. The ESP32 does not relay or proxy any other internet traffic. The spoof is a UX mechanism, not a network gateway.TransportPlaintext TCP behind WPA2. Acceptable for personal proximity transfers. TLS available on ESP32-WROVER (8MB PSRAM) for enterprise use.10. Build Order  --  16 Days
+--------------------------------------------------------------------------------
+
+Day 1eFuse burn first  --  espefuse.py set_flash_voltage 3.3V. Then wire SPI ILI9341 on GPIO 22 for TFT_CS. Confirm ESP32 boots cleanly with display connected. Wire SDMMC 4-bit with firmware pull-ups. Benchmark SD write  --  confirm 2.5+ MB/s. If either fails, resolve before touching any application code.Days 2 - 3ESP32 SoftAP + NCSI spoof: DNSServer + ESPAsyncWebServer running before SoftAP activates. Connect Android phone, verify internet indicator stays green. Connect Windows laptop to hotspot, verify internet stays live. Both NCSI checks must pass before proceeding.Days 4 - 5TCP server, two persistent clients, PING/PONG stable. Stale session reaping. Streaming relay: Android sends file, ESP32 relays to Windows over TCP. CRC32 end-to-end. Measure throughput.Days 6 - 7SD buffer mode: receiver disconnects, file lands on SDMMC, receiver reconnects and pulls. Power-cycle SeaDrop mid-transfer  --  verify reconnect behavior.Days 8 - 9Android app: WifiNetworkSuggestion, bindProcessToNetwork, persistent TCP, HELLO. First-launch wizard. Verify phone internet stays live. Outbound queue.Days 10 - 11Windows app: NetworkOperatorTetheringManager hotspot, BLE watcher, persistent TCP listener, HELLO. First-launch wizard with verification gate. Verify laptop internet stays live. CHANNEL command and SoftAP channel matching.Days 12 - 13RSSI proximity trust: rolling average, tier classification, auto-confirm. TFT state machine: CONNECTED with device names and signal bars, CONFIRM with tier behavior, TRANSFER progress, DONE/ERROR.Days 14 - 15Android share sheet. Windows IExplorerCommand context menu and tray icon. Notifications both sides. Boot persistence both platforms. Full end-to-end demo rehearsal: different networks, powerbank SeaDrop, transfer both directions, internet verified live throughout.Day 16Buffer. Something will break.11. Known Constraints
+--------------------------------------------------------------------------------
+
+Transfer speedStreaming relay: approaches WiFi radio ceiling. SDMMC buffer mode: 2.5 - 10 MB/s write. SPI SD (abandoned) would have been 0.2 - 0.5 MB/s.Concurrent transfersOne at a time. Second request gets REJECT BUSY. Sequential handled by outbound queue on app side.Android API floorWifiNetworkSuggestion requires API 29 (Android 10).WifiNetworkSuggestionManual disconnect via system WiFi picker blacklists suggestion for up to 24 hours  --  not just that session. One notification re-enables. Android OS behavior.OEM battery killersSamsung (OneUI), Xiaomi (MIUI), Huawei/Honor, OnePlus/ColorOS kill background services aggressively. Battery optimization exemption required. User may also need to disable Adaptive Battery for SeaDrop specifically.Samsung Galaxy A15 A15OneUI 8 / Android 16. Standard generate_204 NCSI spoof confirmed sufficient. Old S7-era hardcoded DNS workaround not needed.Windows hotspot conflictIf user already has Mobile Hotspot configured for another purpose, SeaDrop overwrites the hotspot SSID/password. The app warns about this during setup and restores original settings on uninstall.Realtek 8852BE-VTZero concurrent channels  --  cannot connect to two APs simultaneously. Resolved by inverting architecture: laptop hosts hotspot, ESP32 connects to it. Confirmed working via NDIS Infrastructure Station + Software AP on this chip.eFuse burnIrreversible. Must be done before first firmware flash. SDMMC 4-bit cannot operate correctly on GPIO 12 without it.GPIO 2 pull-upNo external pull-up on GPIO 2 (SDMMC D0)  --  prevents USB flashing. Firmware activates internal pull-up after boot via gpio_pullup_en().TLS encryptionNot on WROOM-32 (insufficient PSRAM). Available on WROVER (8MB PSRAM) or ESP32-S3 for enterprise environments.SD card enduranceStreaming relay does not write to SD. Wear only in buffer mode. Industrial cards recommended for heavy use.
+--------------------------------------------------------------------------------
+
+                 SeaDrop  --  Specification v1.3  --  June 2026

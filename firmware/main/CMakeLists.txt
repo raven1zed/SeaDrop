@@ -1,0 +1,23 @@
+idf_component_register(
+    SRCS
+        "main.cpp"
+        "stp_server.cpp"
+        "display.cpp"
+        "ble_server.cpp"
+        "ncsi.cpp"
+        "transfer.cpp"
+    INCLUDE_DIRS
+        "."
+    REQUIRES
+        nvs_flash
+        esp_wifi
+        driver
+        mbedtls
+        esp_timer
+        esp_netif
+        esp_event
+        lwip
+        mdns
+        bt
+        esp_http_server
+)

@@ -1,0 +1,805 @@
+﻿SeaDrop
+Specification & Implementation Document
+Version 1.5  â€”  June 2026
+Changes from v1.4: wiFiControl location permission gate documented and fixed. App operates with or without TFT display and SD card attached. Mobile Hotspot starts automatically during setup wizard â€” user never touches Windows Settings. SeaDrop WiFi disconnect handling: both apps gracefully drop SeaDrop connection and resume primary internet. GitHub release versioning. Full UI/UX spec for Windows app and Android app in YoungSerif/Inter palette.
+
+SeaDrop is a portable, pocket-sized file transfer device powered by an ESP32-WROOM-32. It creates its own WiFi access point, enabling an Android phone and a Windows laptop on completely separate networks to transfer files in both directions without either device losing internet at any point.
+System requirements: Windows 11 24H2 (build 26100) or later. Android 16 (API 36) or later.
+
+1. System Overview
+
+1.1 Core Behavioral Requirements
+Neither device loses internet at any point â€” not during setup, not during transfer, not ever
+Bilateral file transfer: Android to Windows and Windows to Android, identical UX in both directions
+Both apps work when SeaDrop is powered off â€” they drop the SeaDrop connection and resume primary internet silently
+Both apps reconnect to SeaDrop automatically when it powers back on â€” no user action
+Firmware works with or without TFT display attached â€” headless mode for flashing and testing
+Firmware works with or without SD card â€” streaming relay still functions, buffer mode disabled gracefully
+Mobile Hotspot starts automatically during Windows setup wizard â€” user never opens Windows Settings manually
+One-time setup only via first-launch wizard â€” no USB cable for users
+
+1.2 System Requirements
+Windows
+Windows 11 24H2 (build 26100) or later
+Android
+Android 16 (API 36) or later
+ESP32
+ESP32-WROOM-32, Arduino core for ESP32 v3.x or later
+microSD
+Optional. Class 10 / UHS-I if present. Streaming relay works without it.
+TFT
+Optional. ILI9341 2.4 inch SPI. Firmware boots and runs headless if not attached.
+
+1.3 Architecture
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                         SeaDrop                              â”‚
+â”‚  ESP32-WROOM-32  APSTA Mode                                  â”‚
+â”‚                                                              â”‚
+â”‚  SoftAP 192.168.4.1 â”€â”€â–º TCP :4242 â”€â”€â–º Streaming Relay       â”‚
+â”‚  STA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º SDMMC Buffer (optional) â”‚
+â”‚  DNSServer + ESPAsyncWebServer â”€â”€â–º NCSI Spoof               â”‚
+â”‚  BLE UUID 0xFEAD â”€â”€â–º Discovery + headless_mode flag         â”‚
+â”‚  SPI ILI9341 â”€â”€â–º TFT UI (optional, skipped if absent)       â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+           â”‚ SoftAP                     â”‚ STA â†’ Windows Hotspot
+  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”       â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+  â”‚   Android App     â”‚       â”‚    Windows App        â”‚
+  â”‚ WifiNetworkSugg.  â”‚       â”‚ NetworkOperatorTether â”‚
+  â”‚ bindProcessToNet  â”‚       â”‚ wiFiControl + locationâ”‚
+  â”‚ Graceful fallback â”‚       â”‚ Graceful fallback     â”‚
+  â”‚ Internet intact   â”‚       â”‚ Internet intact       â”‚
+  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜       â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+
+2. GitHub Release Versioning
+
+2.1 Version Format
+SeaDrop uses semantic versioning: MAJOR.MINOR.PATCH. All three codebases share the same version number and are released together. A version bump in any one codebase requires a release of all three.
+MAJOR
+Breaking STP protocol change. Both apps must update simultaneously.
+MINOR
+New feature added. Apps are backward-compatible with older firmware.
+PATCH
+Bug fix. No protocol or API changes.
+
+2.2 GitHub Release Structure
+Release: v1.5.0
+â”œâ”€â”€ SeaDrop-v1.5.0-firmware.zip
+â”‚   â””â”€â”€ seadrop/                    â† Arduino sketch folder, flash directly
+â”œâ”€â”€ SeaDrop-v1.5.0-windows.msix     â† Self-signed, install script included
+â”œâ”€â”€ SeaDrop-v1.5.0-windows-cert.cer â† Certificate to install before MSIX
+â”œâ”€â”€ SeaDrop-v1.5.0-android.apk      â† Sideload APK
+â””â”€â”€ install-windows.ps1             â† Installs cert + MSIX in one command
+
+2.3 install-windows.ps1
+# Run as Administrator
+Import-Certificate -FilePath .\SeaDrop-v1.5.0-windows-cert.cer `
+    -CertStoreLocation Cert:\LocalMachine\TrustedPeople
+Add-AppxPackage -Path .\SeaDrop-v1.5.0-windows.msix
+# After install: open SeaDrop from Start Menu
+# Location permission prompt appears on first launch â€” grant it
+
+2.4 Version in Firmware BLE Payload
+The BLE advertisement payload includes the firmware version string. Both apps check version compatibility on HELLO handshake. If the firmware is older than the minimum supported version, the app shows a notification: 'SeaDrop firmware needs updating â€” see github.com/seadrop/releases'. Transfer is blocked until updated.
+// BLE payload format:
+// [SSID null-terminated] [version 3 bytes: major.minor.patch] [slot_count 1 byte] [reg_mode 1 byte]
+
+2.5 STP Version Handshake
+HELLO ANDROID MyPhone token123 1.5.0
+HELLO_ACK sid_1 1.5.0
+// If versions incompatible:
+REJECT VERSION_MISMATCH
+
+3. SeaDrop Disconnect Behavior
+
+When SeaDrop powers off or goes out of range, both apps must drop the SeaDrop connection cleanly and resume normal operation. The user should not notice anything except the tray icon going grey on Windows and the notification updating on Android.
+
+3.1 Windows Disconnect Flow
+ESP32 powers off or goes out of range
+TCP keepalive or PING timeout detected in TcpListener â€” socket throws IOException
+SeaDropService catches exception, marks state = DISCONNECTED
+HotspotManager.StopTetheringAsync() â€” hotspot stops
+Primary WiFi adapter resumes as sole active network interface automatically
+Windows internet resumes â€” no user action, no route table cleanup needed
+Tray icon goes grey. Tooltip: 'SeaDrop not found'
+BleWatcher continues scanning for UUID 0xFEAD
+When SeaDrop powers on: BLE detected â†’ HotspotManager.StartTetheringAsync() â†’ ESP32 connects â†’ TCP session re-established â†’ tray icon green
+
+3.2 Android Disconnect Flow
+ESP32 powers off or out of range
+TCP keepalive or PING timeout â€” socket throws IOException
+SeaDropService catches exception, marks state = DISCONNECTED
+connectivityManager.bindProcessToNetwork(null) â€” releases SeaDrop network binding
+Android OS drops SeaDrop AP from active connections automatically
+Primary mobile data or home WiFi resumes as default route â€” no user action
+Persistent notification updates: 'SeaDrop not found â€” searching...'
+BleScanner continues scanning for UUID 0xFEAD
+When SeaDrop powers on: BLE detected â†’ WifiNetworkSuggestion reconnects â†’ bindProcessToNetwork() â†’ TCP reconnects â†’ notification: 'SeaDrop connected'
+
+3.3 User-Initiated Disconnect â€” Android
+If the user manually disconnects from SeaDrop AP in system WiFi settings, Android blacklists the WifiNetworkSuggestion for up to 24 hours. The app detects this via NetworkCallback (LOSING state on the SeaDrop network) and shows a persistent notification: 'SeaDrop disconnected â€” tap to reconnect.' Tapping opens the system WiFi settings to the SeaDrop AP entry. Once the user connects once manually, the blacklist clears and auto-connect resumes.
+
+3.4 Headless SeaDrop â€” No Display, No SD
+If TFT is not attached, the firmware skips all TFT_eSPI init and all display_task rendering. The TCP server, BLE, NCSI, and relay all operate identically. The BLE payload includes a headless_mode flag so apps can optionally show 'SeaDrop running in headless mode' in their UI.
+If SD card is not attached or fails to mount, the firmware logs the failure over Serial, sets sd_available = false, and disables buffer mode. Streaming relay continues to work normally. If a transfer is initiated while receiver is offline and SD is unavailable, ESP32 sends REJECT SD_UNAVAILABLE. The sending app shows: 'Receiver offline and SeaDrop has no storage. Try again when both devices are connected.'
+// In sd_buffer.cpp
+bool sd_available = false;
+void begin() {
+    gpio_pullup_en(GPIO_NUM_2);
+    // ... other pull-ups
+    if (!SD_MMC.begin()) {
+        Serial.println("[SD] No card â€” buffer mode disabled");
+        sd_available = false;
+        return;
+    }
+    sd_available = true;
+}
+
+4. Hardware
+
+4.1 Components â€” All Optional Except ESP32
+Microcontroller
+ESP32-WROOM-32 (XX5R69, 38-pin DevKit) â€” required
+Display
+ILI9341 2.4 inch TFT, 4-wire SPI â€” optional
+Touch
+XPT2046 resistive, SPI â€” optional, only if display attached
+Storage
+microSD SDMMC 4-bit, Class 10/UHS-I â€” optional
+Power
+USB Micro-B, 5V from any USB power source or powerbank
+
+4.2 Mandatory eFuse Burn
+Required before first firmware flash if SD card will be used. Irreversible. If SD card is not used, eFuse burn is not required but GPIO 12 must remain unconnected.
+espefuse.py --port COM_PORT set_flash_voltage 3.3V
+
+4.3 Strapping Pin Summary
+GPIO
+Boot Function
+Assignment
+GPIO 0
+Download mode
+Unassigned. Float or 10k pull-up.
+GPIO 2
+Download mode secondary
+SDMMC D0. No external pull-up. gpio_pullup_en() in firmware after boot.
+GPIO 5
+SDIO timing
+SDMMC D3. 10k pull-up.
+GPIO 12
+Flash LDO voltage
+SDMMC D2. 10k pull-up ONLY after eFuse burn.
+GPIO 15
+SDIO timing
+SDMMC CMD only. Not shared with TFT.
+
+4.4 Pin Map
+Pin/Signal
+ESP32 GPIO
+Notes
+TFT_CS
+GPIO 22
+Display chip select â€” optional
+TFT_DC
+GPIO 27
+Display data/command â€” optional
+TFT_RST
+GPIO 26
+Display reset â€” optional
+TFT_MOSI
+GPIO 23
+VSPI MOSI â€” shared with touch if display present
+TFT_CLK
+GPIO 18
+VSPI clock â€” shared with touch if display present
+TFT_MISO
+GPIO 19
+VSPI MISO â€” shared with touch if display present
+T_CS
+GPIO 33
+XPT2046 touch CS â€” optional
+T_IRQ
+GPIO 32
+Touch interrupt â€” optional
+SDMMC_CLK
+GPIO 14
+SDMMC clock â€” optional
+SDMMC_CMD
+GPIO 15
+SDMMC command â€” 10k pull-up â€” optional
+SDMMC_D0
+GPIO 2
+SDMMC data 0 â€” no external pull-up â€” optional
+SDMMC_D1
+GPIO 4
+SDMMC data 1 â€” 10k pull-up â€” optional
+SDMMC_D2
+GPIO 12
+SDMMC data 2 â€” 10k pull-up after eFuse burn â€” optional
+SDMMC_D3
+GPIO 13
+SDMMC data 3 â€” 10k pull-up â€” optional
+5V
+VIN
+USB 5V â€” NOT 3V3
+GND
+GND
+Common ground
+
+5. ESP32 Firmware
+
+5.1 Boot Sequence â€” Strict Order
+void setup() {
+    Serial.begin(115200);
+
+    // 1. NVS â€” load all credentials first
+    nvs_store.begin();
+
+    // 2. Optional: SD card
+    sd_buffer.begin(); // sets sd_available, does not crash if absent
+
+    // 3. Optional: TFT display
+    bool display_available = display.begin(); // returns false if absent
+    if (display_available) display.setState(STATE_IDLE);
+
+    // 4. NCSI spoof BEFORE softAP
+    ncsi.begin();
+
+    // 5. SoftAP
+    wifi_ap.begin(nvs_store.ssid, nvs_store.pass);
+
+    // 6. STA to Windows hotspot
+    wifi_sta.begin(nvs_store.hs_ssid, nvs_store.hs_pass);
+
+    // 7. BLE â€” includes headless and sd_available flags
+    ble_adv.begin(!display_available, sd_available);
+
+    // 8. TCP server
+    tcp_server.begin(4242);
+
+    // 9. FreeRTOS tasks
+    xTaskCreatePinnedToCore(tcp_server_task, "tcp", 8192, NULL, 5, NULL, 0);
+    xTaskCreatePinnedToCore(ble_adv_task,    "ble", 4096, NULL, 3, NULL, 0);
+    xTaskCreatePinnedToCore(ncsi_task,       "ncsi",4096, NULL, 3, NULL, 0);
+    if (display_available) {
+        xTaskCreatePinnedToCore(display_task, "disp",8192, NULL, 4, NULL, 1);
+        xTaskCreatePinnedToCore(touch_task,   "tch", 4096, NULL, 3, NULL, 1);
+    }
+    if (sd_available) {
+        xTaskCreatePinnedToCore(sd_buffer_task,"sd", 8192, NULL, 3, NULL, 1);
+    }
+}
+
+void loop() { vTaskDelay(portMAX_DELAY); }
+
+5.2 NCSI Spoof
+// ncsi.cpp â€” starts before WiFi.softAP()
+dnsServer.start(53, "*", IPAddress(192,168,4,1));
+server.on("/connecttest.txt", HTTP_GET, [](AsyncWebServerRequest *r){
+    r->send(200, "text/plain", "Microsoft Connect Test"); });
+server.on("/redirect", HTTP_GET, [](AsyncWebServerRequest *r){
+    r->redirect("http://192.168.4.1"); });
+server.on("/generate_204", HTTP_GET, [](AsyncWebServerRequest *r){
+    r->send(204); });
+server.on("/hotspot-detect.html", HTTP_GET, [](AsyncWebServerRequest *r){
+    r->send(200, "text/html", "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>"); });
+server.begin();
+
+5.3 STP Commands
+HELLO <type> <name> <token> <version>
+Client greeting with version string
+HELLO_ACK <session_id> <version>
+ESP32 session ID + firmware version
+PING / PONG
+Keepalive every 10s
+CHANNEL <n>
+Windows reports home WiFi channel
+SEND <file> <bytes> <crc32> <mode>
+STREAM or BUFFER
+SEND_ACK <mode>
+Confirms mode, BUFFER only if sd_available
+SEND_DONE
+End of binary stream
+NOTIFY <file> <bytes>
+ESP32 to receiver: file on SD ready
+PULL <file>
+Receiver requests SD file
+PULL_DATA <bytes>
+ESP32 streams SD file
+PULL_DONE
+End of stream
+ACK
+Generic acknowledgement
+REJECT <reason>
+AUTH_FAIL / SD_FULL / SD_UNAVAILABLE / NO_PEER / BUSY / CHECKSUM_FAIL / REG_CLOSED / VERSION_MISMATCH
+CANCEL
+Either party cancels
+STATUS
+Client requests session state
+STATUS_RESP <state> <peer> <mode> <sd>
+Includes sd_available flag
+REG <type> <name> <hs_ssid> <hs_pass>
+Registration Mode only
+TOKEN <hex>
+16-byte token response
+
+5.4 FreeRTOS Tasks
+tcp_server_task
+Core 0 â€” TCP, session table, streaming relay, RSSI, channel match
+ble_adv_task
+Core 0 â€” BLE UUID 0xFEAD, version, headless flag, sd_available flag
+ncsi_task
+Core 0 â€” DNSServer loop + ESPAsyncWebServer
+display_task
+Core 1 â€” TFT state machine â€” only if display_available
+touch_task
+Core 1 â€” XPT2046 via T_IRQ â€” only if display_available
+sd_buffer_task
+Core 1 â€” SDMMC writes/reads â€” only if sd_available
+
+5.5 NVS Keys
+seadrop/ssid
+SoftAP SSID â€” generated first boot
+seadrop/pass
+SoftAP WPA2 password
+seadrop/hsssid
+Windows hotspot SSID
+seadrop/hspass
+Windows hotspot password
+seadrop/devA
+Android device name
+seadrop/devW
+Windows device name
+seadrop/tokA
+16-byte Android token
+seadrop/tokW
+16-byte Windows token
+seadrop/regdone
+Registration complete flag
+
+6. TFT Display UI â€” Minimalist 240x320
+
+All TFT rendering is skipped when display_available is false. The state machine still runs internally â€” it drives Serial debug output in headless mode.
+
+6.1 Design Rules
+Maximum three elements visible at any time
+Progress bar always full width 240px when visible
+YoungSerif 24pt for title text. Inter 16pt for body. Inter 12pt for status.
+RSSI shown as signal bars 1 to 3, not dBm numbers
+Direction arrow is the only indicator of transfer direction
+Color: no border = far tier, yellow border = medium tier, green border = close tier
+SD unavailable shown as small dim indicator next to uptime in IDLE state only
+
+6.2 STATE_IDLE
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                        â”‚
+â”‚       SeaDrop          â”‚
+â”‚                        â”‚
+â”‚   No devices nearby    â”‚
+â”‚                        â”‚
+â”‚  SeaDrop-A3F9C2  [SD]  â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+[SD] indicator dims to grey if sd_available is false.
+
+6.3 STATE_CONNECTED
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚  MyPhone        â–ˆâ–ˆâ–ˆâ–‘   â”‚
+â”‚                        â”‚
+â”‚  MyLaptop       â–ˆâ–ˆâ–ˆâ–ˆ   â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+
+6.4 STATE_CONFIRM
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚  photo.jpg      4.2MB  â”‚
+â”‚                        â”‚
+â”‚  MyPhone â”€â”€â”€â”€â”€â”€â–º MyLaptop
+â”‚                        â”‚
+â”‚     [ Confirm  3s ]    â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+
+6.5 STATE_TRANSFER
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚  photo.jpg             â”‚
+â”‚                        â”‚
+â”‚  â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–‘â–‘â–‘â–‘  67% â”‚
+â”‚                        â”‚
+â”‚       2.1 MB/s         â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+
+6.6 STATE_DONE
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                        â”‚
+â”‚         âœ“ Done         â”‚
+â”‚                        â”‚
+â”‚      0.8 seconds       â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+
+6.7 STATE_ERROR
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                        â”‚
+â”‚    âœ— Transfer failed   â”‚
+â”‚                        â”‚
+â”‚      SD_UNAVAILABLE    â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+
+7. Windows Application
+
+7.1 Stack
+Language
+C# .NET 8
+UI Framework
+WinUI 3 (Windows App SDK)
+Fonts
+YoungSerif for titles and SeaDrop wordmark. Inter for all other text.
+Accent color
+#E85D00 Space Orange â€” buttons, active states, tray icon indicator
+Background
+#FEFEFE â€” never pure white
+Shadow
+#1A1208 â€” never pure black
+Hotspot
+NetworkOperatorTetheringManager.CreateFromConnectionProfile()
+Location gate
+WiFiAdapter.RequestAccessAsync() â€” must succeed before hotspot call
+BLE
+BluetoothLEAdvertisementWatcher
+TCP
+System.Net.Sockets â€” persistent listener on hotspot interface
+Shell
+IExplorerCommand â€” first-level Windows 11 context menu
+Shell IPC
+Named pipe \\\\.\\ pipe\\SeaDropShell
+Boot
+MSIX startup task via Task Scheduler
+Tokens
+Windows Credential Manager DPAPI
+Queue
+SQLite
+Min OS
+Windows 11 24H2 build 26100
+
+7.2 wiFiControl and Location Permission â€” The Crash Fix
+wiFiControl is a standard DeviceCapability, not a restricted custom capability. It works with a self-signed certificate installed to the machine's TrustedPeople store. The crash that occurs 3 seconds after launch is caused by calling CreateFromConnectionProfile before WiFiAdapter.RequestAccessAsync() has been called and granted. The OS requires explicit location consent before granting wiFiControl at runtime.
+The fix is a strict startup gate:
+// SeaDropService.cs â€” startup order is non-negotiable
+public async Task StartAsync() {
+    // Gate 1: location permission
+    var access = await WiFiAdapter.RequestAccessAsync();
+    if (access != WiFiAccessStatus.Allowed) {
+        ShowNotification("SeaDrop needs location permission",
+            "Open Settings > Privacy > Location and allow SeaDrop");
+        return; // do not proceed
+    }
+
+    // Gate 2: start hotspot
+    var started = await _hotspotManager.StartAsync();
+    if (!started) {
+        ShowNotification("Hotspot could not start",
+            "Check that WiFi is enabled and try again");
+        return;
+    }
+
+    // Gate 3: BLE watcher
+    _bleWatcher.Start();
+
+    // Gate 4: TCP listener â€” waits for ESP32 to connect
+    await _tcpListener.StartAsync();
+}
+
+7.3 MSIX Manifest
+<Capabilities>
+  <Capability Name="internetClient"/>
+  <DeviceCapability Name="wiFiControl"/>
+</Capabilities>
+
+7.4 Startup Sequence â€” Full Order
+App.OnLaunched() â€” initialize tray icon in grey state, no window
+SeaDropService.StartAsync() called on background thread
+WiFiAdapter.RequestAccessAsync() â€” if denied, show notification and stop
+HotspotManager.StartTetheringAsync() with fixed SSID and password from Credential Manager
+BluetoothLEAdvertisementWatcher.Start() â€” scanning for UUID 0xFEAD
+TcpListener.StartAsync() on hotspot interface â€” waits for ESP32 STA connection
+On ESP32 TCP connect: send HELLO_ACK, start PING loop, tray icon green
+Check outbound SQLite queue â€” resume any pending transfers
+
+7.5 Tray Icon States
+Grey
+SeaDrop not found or hotspot not running
+Amber pulse
+Hotspot running, scanning for SeaDrop BLE
+Green
+SeaDrop connected, line live
+Orange ring
+Transfer in progress
+
+7.6 Tray Right-Click Menu
+Send a file...              â† opens file picker
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+SeaDrop connected    v1.5.0 â† grey status, not clickable
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+Settings                    â† opens main window
+Quit
+
+7.7 Main Window â€” Settings Only
+Opens only from tray right-click Settings. Never opens automatically. Contains:
+SeaDrop name shown â€” YoungSerif 32pt Space Orange
+Connected device: [Android device name] â€” Inter 16pt
+Hotspot SSID: SeaDrop-W-XXXXXX â€” Inter 14pt grey
+Firmware version detected â€” Inter 14pt grey
+Re-register button â€” for replacing a device
+Open GitHub releases button â€” for firmware updates
+
+7.8 Setup Wizard â€” Full Flow
+The wizard handles the hotspot automatically. The user never opens Windows Settings or Mobile Hotspot settings manually.
+
+Screen 1 â€” Welcome
+YoungSerif 40pt: 'SeaDrop'. Inter 18pt below: 'Seamless file transfer between your phone and laptop. No internet switching. No setup after this.'
+Space Orange button: 'Get Started'
+
+Screen 2 â€” Location Permission
+Inter 20pt: 'SeaDrop needs location access to manage your WiFi connection.'
+Inter 16pt grey: 'This is required by Windows to control the hotspot. SeaDrop never uses your location for anything else.'
+Space Orange button: 'Grant Location Access' â€” calls WiFiAdapter.RequestAccessAsync() directly. System dialog appears. User taps Allow.
+If denied: button label changes to 'Try Again'. Retry loop. Wizard cannot proceed without this.
+
+Screen 3 â€” Starting Hotspot
+Inter 20pt: 'Starting SeaDrop connection...'
+Animated Space Orange progress indicator.
+App calls HotspotManager.StartTetheringAsync() with generated SSID and password. If successful: auto-advances. If failed: shows error with 'Try Again' button.
+
+Screen 4 â€” Power on SeaDrop
+Inter 20pt: 'Power on your SeaDrop device.'
+Inter 16pt grey: 'The SeaDrop screen should show REGISTRATION MODE.'
+BLE scanner running. When UUID 0xFEAD detected and reg_mode flag true: auto-advances with animation.
+
+Screen 5 â€” Connect to SeaDrop WiFi
+Inter 20pt: 'Connecting to SeaDrop...'
+App connects to SeaDrop SoftAP â€” one-time only during setup. Progress indicator. Auto-advances when TCP established.
+
+Screen 6 â€” Name This Device
+Inter 20pt: 'What should SeaDrop call this laptop?'
+Inter text field pre-filled with machine hostname. User can edit.
+Space Orange button: 'Register' â€” sends REG WINDOWS [name] [hs_ssid] [hs_pass] over TCP. Waits for TOKEN response. Stores token in Credential Manager.
+
+Screen 7 â€” Verification
+Inter 20pt: 'Verifying everything works...'
+Three checks shown with animated ticks:
+âœ“ Hotspot running
+âœ“ SeaDrop connected
+âœ“ Internet confirmed intact
+Each check is a real test. Internet check: HTTP GET to a known external address on the primary WiFi interface, not the hotspot interface. If all three pass: auto-advances.
+
+Screen 8 â€” Done
+YoungSerif 40pt: 'All set.'
+Inter 18pt: 'SeaDrop lives in your system tray. Right-click any file and choose Send via SeaDrop, or drag files onto the tray icon.'
+Space Orange button: 'Done' â€” closes wizard, shows tray icon, wizard never opens again.
+
+8. Android Application
+
+8.1 Stack
+Language
+Kotlin
+Min SDK
+API 36 (Android 16)
+UI
+Jetpack Compose
+Fonts
+YoungSerif for titles. Inter for all other text.
+Accent
+#E85D00 Space Orange
+Background
+#FEFEFE
+WiFi
+WifiNetworkSuggestion
+Network binding
+ConnectivityManager.bindProcessToNetwork()
+Background
+Foreground Service FOREGROUND_SERVICE_TYPE_DATA_SYNC
+Boot
+RECEIVE_BOOT_COMPLETED
+BLE
+BluetoothLeScanner UUID 0xFEAD
+TCP
+Java Socket + Kotlin coroutines
+Share
+Direct Share ChooserTargetService
+Files
+Storage Access Framework
+Tokens
+EncryptedSharedPreferences AES-256
+Queue
+Room database
+Locks
+WIFI_MODE_FULL_HIGH_PERF + WakeLock
+
+8.2 Service Startup â€” Strict Order
+// SeaDropService.kt
+override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    startForeground(NOTIF_ID, buildNotification("Starting..."))
+    scope.launch {
+        // Gate 1: permissions
+        if (!hasLocationPermission()) { requestPermissionsViaActivity(); return@launch }
+        if (!hasNearbyWifiPermission()) { requestPermissionsViaActivity(); return@launch }
+        if (!isBatteryExempt()) { requestBatteryExemptionViaActivity(); return@launch }
+
+        // Gate 2: register WiFi suggestion
+        wifiManager.registerSuggestion()
+
+        // Gate 3: acquire locks
+        wifiLock.acquire()
+        wakeLock.acquire()
+
+        // Gate 4: BLE scan
+        bleScanner.start()
+
+        // Gate 5: maintain TCP connection loop
+        maintainConnection()
+    }
+    return START_STICKY
+}
+
+8.3 Maintain Connection Loop
+private suspend fun maintainConnection() {
+    while (true) {
+        try {
+            waitForSeaDropNetwork() // suspends until WifiSuggestion connects
+            val network = connectivityManager.getNetworkForRequest(seadropRequest)
+            connectivityManager.bindProcessToNetwork(network)
+            socket = Socket().apply {
+                keepAlive = true
+                soTimeout = 15000
+                connect(InetSocketAddress("192.168.4.1", 4242), 5000)
+            }
+            sendHello()
+            checkOutboundQueue()
+            updateNotification("SeaDrop connected")
+            readLoop(socket!!) // blocks until dead
+        } catch (e: IOException) {
+            // SeaDrop went offline
+            socket?.close(); socket = null
+            connectivityManager.bindProcessToNetwork(null) // release binding
+            updateNotification("SeaDrop not found â€” searching...")
+            delay(3000)
+        }
+    }
+}
+
+8.4 Setup Wizard â€” Full Flow
+MainActivity shows the wizard only on first launch. After registration it calls finish() and never opens again.
+
+Screen 1 â€” Welcome
+YoungSerif 40pt Space Orange: 'SeaDrop'. Inter 18pt: 'Transfer files between your phone and laptop. No internet switching. Ever.'
+Space Orange button: 'Set Up SeaDrop'
+
+Screen 2 â€” Permissions
+Inter 20pt: 'SeaDrop needs a few permissions to run.'
+Three rows, each with status icon and Grant button:
+Location â€” required for WiFi management on Android
+Nearby devices â€” required for BLE discovery
+Battery optimization exemption â€” required to stay connected when screen is off
+Each Grant button opens the correct system dialog. Checkmarks fill as each is granted. Next button enabled only when all three granted.
+
+Screen 3 â€” Power on SeaDrop
+Inter 20pt: 'Power on your SeaDrop device.'
+Inter 16pt grey: 'The screen should show REGISTRATION MODE.'
+BLE scanner running. When UUID 0xFEAD detected with reg_mode flag: auto-advances.
+
+Screen 4 â€” Connect to SeaDrop WiFi
+Inter 20pt: 'Connecting to SeaDrop...'
+App connects to SeaDrop SoftAP â€” one-time only during setup. Auto-advances when TCP established.
+
+Screen 5 â€” Name This Device
+Inter 20pt: 'What should SeaDrop call this phone?'
+Text field pre-filled with device name. User can edit.
+Space Orange button: 'Register' â€” sends REG ANDROID [name] over TCP. Waits for TOKEN. Stores in EncryptedSharedPreferences.
+
+Screen 6 â€” WiFi Suggestion Approval
+Inter 20pt: 'Allow SeaDrop to connect automatically.'
+Inter 16pt grey: 'Android will ask for permission once. After that, SeaDrop connects silently whenever it is nearby.'
+App calls addNetworkSuggestions(). System dialog appears automatically. User taps Allow.
+
+Screen 7 â€” Verification
+Three animated checks:
+âœ“ SeaDrop registered
+âœ“ Auto-connect approved
+âœ“ Internet confirmed intact
+
+Screen 8 â€” Done
+YoungSerif 40pt: 'All set.'
+Inter 18pt: 'SeaDrop runs in the background. Share any file and choose SeaDrop, or wait to receive files from your laptop.'
+Space Orange button: 'Done' â€” finish(), wizard never opens again.
+
+9. Bilateral Transfer Flow
+
+9.1 Android to Windows
+Android share sheet â†’ 'SeaDrop'
+  â†’ SeaDropService.sendFile(uri)
+  â†’ TcpClient.send(SEND filename bytes crc32 STREAM)
+  â†’ ESP32 relays to Windows TCP listener
+  â†’ Windows ToastHelper: '[filename] from [device] â€” Accept / Decline'
+  â†’ Accept: FileHelper.save() to Downloads\SeaDrop\
+
+9.2 Windows to Android
+Explorer right-click â†’ 'Send via SeaDrop'
+  â†’ Named pipe to SeaDropService
+  â†’ TransferManager.sendFile(path)
+  â†’ TcpClient.send(SEND filename bytes crc32 STREAM)
+  â†’ ESP32 relays to Android TCP socket
+  â†’ Android NotificationHelper: '[filename] from [device] â€” Accept / Decline'
+  â†’ Accept: FileHelper.save() to Downloads/SeaDrop/
+
+9.3 Incoming Notification Copy
+Android: 'photo.jpg  |  4.2MB  from MyLaptop' with inline Accept and Decline actions.
+Windows toast: 'photo.jpg  |  4.2MB  from MyPhone' with Accept and Decline buttons.
+Neither notification opens the app window on tap â€” file saves directly from the notification action receiver.
+
+10. Security Model
+
+Auth tokens
+16-byte random tokens in NVS. Every HELLO validated. Unknown tokens dropped.
+SoftAP password
+WPA2, shown on TFT during Registration Mode only.
+Hotspot password
+Generated at Windows registration. Stored in NVS and Credential Manager.
+Registration gate
+REG commands in Registration Mode only. 5-minute timeout.
+RSSI trust
+UX convenience layer only. Not a security boundary.
+Transfer consent
+Receiver accepts every file via notification or TFT.
+No cloud
+No server, no relay, no internet routing. Files never leave local subnet.
+NCSI scope
+NCSI spoof serves probe URLs only. No internet proxying.
+Transport
+Plaintext TCP behind WPA2. TLS available on ESP32-WROVER with 8MB PSRAM.
+Version gate
+REJECT VERSION_MISMATCH blocks transfers on incompatible firmware/app pairs.
+
+11. Build Order
+
+Day 1
+eFuse burn if SD card used. Wire SPI display on GPIO 22. Wire SDMMC 4-bit. Boot firmware. Verify display_available and sd_available flags work correctly in headless mode (disconnect display, confirm no crash). Benchmark SD: 2.5+ MB/s.
+Days 2â€“3
+NCSI spoof before SoftAP. Android internet indicator stays green. Windows internet stays live with hotspot running. Both verified before any app code.
+Days 4â€“5
+TCP server. Two persistent sessions. PING/PONG. Streaming relay both directions. CRC32 verified. Disconnect behavior: socket IOException caught, binding released, primary internet resumes.
+Days 6â€“7
+SD buffer mode if sd_available. Headless fallback REJECT SD_UNAVAILABLE tested.
+Days 8â€“9
+Windows app: location permission gate, hotspot startup, BLE watcher, TCP listener, tray icon, setup wizard all 8 screens. Verify no crash on launch.
+Days 10â€“11
+Android app: permission gates, WifiNetworkSuggestion, bindProcessToNetwork, TCP loop, setup wizard all 8 screens. Verify disconnect and reconnect cycle.
+Days 12â€“13
+RSSI tiers. TFT state machine all states. Bilateral transfer notifications both sides. IExplorerCommand shell extension.
+Days 14â€“15
+GitHub release packaging: firmware zip, MSIX with install-windows.ps1, APK. Version string in BLE payload and HELLO handshake. End-to-end demo.
+Day 16
+Buffer.
+
+12. Known Constraints
+
+wiFiControl crash
+Caused by missing WiFiAdapter.RequestAccessAsync() before CreateFromConnectionProfile. Fixed in v1.5 startup gate. Not a certificate restriction.
+WifiNetworkSuggestion
+Manual disconnect via system WiFi picker: 24-hour blacklist. App shows notification with manual reconnect prompt. Reconnecting once clears the block.
+Realtek 8852BE-VT
+Zero concurrent channels. Solved by laptop hosting hotspot, ESP32 connecting as STA. Co-existence confirmed in netsh wirelesscapabilities output.
+Headless firmware
+All display and touch tasks skipped. All network and transfer functionality intact.
+No SD card
+BUFFER mode disabled. REJECT SD_UNAVAILABLE sent. Streaming relay unaffected.
+OEM battery killers
+Samsung OneUI, Xiaomi MIUI, Huawei, OnePlus. Battery exemption required plus Adaptive Battery disabled for SeaDrop.
+Android API floor
+API 36. WifiNetworkSuggestion, NEARBY_WIFI_DEVICES, FOREGROUND_SERVICE_TYPE_DATA_SYNC all stable.
+eFuse burn
+Irreversible. Required for SDMMC D2 pull-up safety. Skip if SD card not used.
+TLS
+Not on WROOM-32. Available on WROVER 8MB PSRAM or ESP32-S3.
+NCSI cache
+Windows caches negative NCSI per BSSID. ESP32 starts DNS + HTTP before SoftAP to prevent cached negatives.
+Version mismatch
+REJECT VERSION_MISMATCH blocks transfer. App shows GitHub releases link. User reflashes firmware or updates app.
+
+
+SeaDrop â€” Specification v1.5 â€” June 2026

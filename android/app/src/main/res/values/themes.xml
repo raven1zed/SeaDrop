@@ -1,0 +1,62 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme - Material Design 3 -->
+    <style name="Theme.SeaDrop" parent="Theme.Material3.DynamicColors.DayNight.NoActionBar">
+        <!-- Primary brand color - Red-Orange fallback for non-dynamic devices -->
+        <item name="colorPrimary">@color/seadrop_primary</item>
+        <item name="colorOnPrimary">@color/seadrop_on_primary</item>
+
+        <!-- Secondary brand color -->
+        <item name="colorSecondary">@color/seadrop_accent</item>
+        <item name="colorOnSecondary">@color/seadrop_on_primary</item>
+
+        <!-- Error -->
+        <item name="colorError">@color/seadrop_red</item>
+        <item name="colorOnError">@color/seadrop_on_primary</item>
+
+        <!-- Status bar -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+
+        <!-- Background -->
+        <item name="android:colorBackground">@color/seadrop_bg</item>
+        <item name="colorSurface">@color/seadrop_surface</item>
+        <item name="colorSurfaceVariant">@color/seadrop_surface_variant</item>
+
+        <!-- Text -->
+        <item name="android:textColorPrimary">@color/seadrop_text_primary</item>
+        <item name="android:textColorSecondary">@color/seadrop_text_secondary</item>
+
+        <!-- Edge-to-edge -->
+        <item name="android:windowTranslucentStatus">true</item>
+        <item name="android:windowTranslucentNavigation">true</item>
+
+        <!-- Shape appearance -->
+        <item name="shapeAppearanceSmallComponent">@style/ShapeAppearance.SeaDrop.Small</item>
+        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.SeaDrop.Medium</item>
+        <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.SeaDrop.Large</item>
+
+        <!-- Typography -->
+        <item name="textAppearanceHeadlineLarge">@style/TextAppearance.SeaDrop.HeadlineLarge</item>
+        <item name="textAppearanceHeadlineMedium">@style/TextAppearance.SeaDrop.HeadlineMedium</item>
+        <item name="textAppearanceHeadlineSmall">@style/TextAppearance.SeaDrop.HeadlineSmall</item>
+        <item name="textAppearanceTitleLarge">@style/TextAppearance.SeaDrop.TitleLarge</item>
+        <item name="textAppearanceTitleMedium">@style/TextAppearance.SeaDrop.TitleMedium</item>
+        <item name="textAppearanceTitleSmall">@style/TextAppearance.SeaDrop.TitleSmall</item>
+        <item name="textAppearanceBodyLarge">@style/TextAppearance.SeaDrop.BodyLarge</item>
+        <item name="textAppearanceBodyMedium">@style/TextAppearance.SeaDrop.BodyMedium</item>
+        <item name="textAppearanceBodySmall">@style/TextAppearance.SeaDrop.BodySmall</item>
+        <item name="textAppearanceLabelLarge">@style/TextAppearance.SeaDrop.LabelLarge</item>
+    </style>
+
+    <!-- Splash theme -->
+    <style name="Theme.SeaDrop.Splash" parent="Theme.SeaDrop">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+    </style>
+
+    <!-- Registration theme -->
+    <style name="Theme.SeaDrop.Registration" parent="Theme.SeaDrop">
+        <item name="android:windowFullscreen">false</item>
+    </style>
+</resources>

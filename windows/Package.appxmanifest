@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+         xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+         xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+         IgnorableNamespaces="uap uap5 uap10 desktop4 rescap">
+
+<Identity Name="SeaDrop"
+             Publisher="CN=SeaDrop"
+             Version="1.5.0.0" />
+
+   <Properties>
+     <DisplayName>SeaDrop</DisplayName>
+     <PublisherDisplayName>SeaDrop</PublisherDisplayName>
+     <Logo>Assets\StoreLogo.png</Logo>
+   </Properties>
+
+   <Resources>
+     <Resource Language="en-US" />
+   </Resources>
+
+   <Dependencies>
+     <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+   </Dependencies>
+
+   <Applications>
+     <Application Id="App"
+                  Executable="SeaDrop.exe"
+                  EntryPoint="SeaDropWindows.App">
+       <uap:VisualElements DisplayName="SeaDrop"
+                           Square150x150Logo="Assets\Square150x150Logo.png"
+                           Square44x44Logo="Assets\Square44x44Logo.png"
+                           Description="SeaDrop - Seamless file transfer"
+                           BackgroundColor="#FEFEFE">
+         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" ShortName="SeaDrop" />
+         <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#FEFEFE" />
+       </uap:VisualElements>
+      <Extensions>
+        <uap5:Extension Category="windows.startupTask" Executable="SeaDrop.exe" EntryPoint="SeaDropWindows.App">
+          <uap5:StartupTask TaskId="SeaDropStartup" Enabled="true" DisplayName="SeaDrop" />
+        </uap5:Extension>
+        <uap:Extension Category="windows.protocol">
+          <uap:Protocol Name="seadrop">
+            <uap:DisplayName>SeaDrop</uap:DisplayName>
+          </uap:Protocol>
+        </uap:Extension>
+        <desktop4:Extension Category="windows.fileExplorerContextMenus">
+          <desktop4:FileExplorerContextMenus>
+            <desktop4:ItemType Type="*">
+              <desktop4:Verb Id="SendViaSeaDrop" Clsid="E85D2F3A-7C9E-4D6B-9F1A-2B3C4D5E6F70" />
+            </desktop4:ItemType>
+          </desktop4:FileExplorerContextMenus>
+        </desktop4:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <Capability Name="internetClient" />
+    <DeviceCapability Name="wiFiControl" />
+  </Capabilities>
+
+</Package>

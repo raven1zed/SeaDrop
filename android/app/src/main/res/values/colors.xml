@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- SeaDrop Space Orange Palette -->
+    <color name="seadrop_primary">#E85D00</color>
+    <color name="seadrop_on_primary">#FFFFFF</color>
+    
+    <!-- Status Colors -->
+    <color name="seadrop_green">#22C55E</color>
+    <color name="seadrop_amber">#F59E0B</color>
+    <color name="seadrop_red">#EF4444</color>
+    
+    <!-- Background -->
+    <color name="seadrop_bg">#FEFEFE</color>
+    <color name="seadrop_surface">#E8E8E8</color>
+    <color name="seadrop_surface_variant">#293548</color>
+    <color name="seadrop_text_muted">#64748B</color>
+    <color name="seadrop_accent">#06B6D4</color>
+    
+    <!-- Text -->
+    <color name="seadrop_text_primary">#1A1208</color>
+    <color name="seadrop_text_secondary">#888888</color>
+    <color name="seadrop_border">#E5E5E5</color>
+    <color name="seadrop_state_pressed">#FFFFFF26</color>
+    <color name="seadrop_state_hover">#FFFFFF1A</color>
+    <color name="seadrop_state_focused">#FFFFFF1F</color>
+</resources>

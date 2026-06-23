@@ -1,0 +1,73 @@
+# Build outputs
+**/bin/
+**/obj/
+**/build/
+**/.gradle/
+**/out/
+**/dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Firmware
+firmware/.pio/
+firmware/build/
+firmware/managed_components/
+firmware/.cache/
+firmware/*.elf
+firmware/*.bin
+firmware/*.map
+firmware/sdkconfig*
+firmware/partitions.csv
+firmware/dependencies.lock
+
+# Android
+android/app/build/
+android/.gradle/
+android/gradle/wrapper/gradle-wrapper.jar
+android/local.properties
+android/*.iml
+android/app/*.iml
+
+# Windows
+windows/bin/
+windows/obj/
+windows/*.user
+windows/*.suo
+windows/SeaDrop.ShellExtension/bin/
+windows/SeaDrop.ShellExtension/obj/
+windows/SeaDrop.Installer/bin/
+windows/SeaDrop.Installer/obj/
+windows/PriTasksStub/bin/
+windows/PriTasksStub/obj/
+
+# Secrets and certificates — never commit signing keys
+**/secrets.json
+**/local.properties
+**/*.keystore
+**/*.jks
+**/*.pfx
+**/*.cer
+
+# Logs
+*.log
+
+# Release artifacts (built, not source)
+release/
+
+# Scratch / planning tools
+.kilo/
+"README FIRST.txt"
+docs/extracted_spec/
+
+# Node (legacy prototype — not part of v1.5)
+seadrop-windows/
+node_modules/

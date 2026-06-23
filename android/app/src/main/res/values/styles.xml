@@ -1,0 +1,143 @@
+<resources>
+    <!-- Shape Appearances -->
+    <style name="ShapeAppearance.SeaDrop.Small" parent="ShapeAppearance.Material3.SmallComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">8dp</item>
+    </style>
+
+    <style name="ShapeAppearance.SeaDrop.Medium" parent="ShapeAppearance.Material3.MediumComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">16dp</item>
+    </style>
+
+    <style name="ShapeAppearance.SeaDrop.Large" parent="ShapeAppearance.Material3.LargeComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">24dp</item>
+    </style>
+
+    <!-- Typography - YoungSerif for titles/headlines, Inter for body -->
+    <style name="TextAppearance.SeaDrop.HeadlineLarge" parent="TextAppearance.Material3.HeadlineLarge">
+        <item name="fontFamily">@font/youngserif_regular</item>
+        <item name="android:textSize">32sp</item>
+        <item name="android:textColor">@color/seadrop_text_primary</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.SeaDrop.HeadlineMedium" parent="TextAppearance.Material3.HeadlineMedium">
+        <item name="fontFamily">@font/youngserif_regular</item>
+        <item name="android:textSize">28sp</item>
+        <item name="android:textColor">@color/seadrop_text_primary</item>
+    </style>
+
+    <style name="TextAppearance.SeaDrop.HeadlineSmall" parent="TextAppearance.Material3.HeadlineSmall">
+        <item name="fontFamily">@font/youngserif_regular</item>
+        <item name="android:textSize">24sp</item>
+        <item name="android:textColor">@color/seadrop_text_primary</item>
+    </style>
+
+    <!-- Toolbar title uses YoungSerif (matches Windows header) -->
+    <style name="TextAppearance.SeaDrop.ToolbarTitle" parent="TextAppearance.Material3.HeadlineSmall">
+        <item name="fontFamily">@font/youngserif_regular</item>
+        <item name="android:textSize">22sp</item>
+        <item name="android:textColor">@color/seadrop_text_primary</item>
+    </style>
+
+    <style name="TextAppearance.SeaDrop.TitleLarge" parent="TextAppearance.Material3.TitleLarge">
+        <item name="fontFamily">@font/inter_semibold</item>
+        <item name="android:textSize">22sp</item>
+        <item name="android:textColor">@color/seadrop_text_primary</item>
+    </style>
+
+    <style name="TextAppearance.SeaDrop.TitleMedium" parent="TextAppearance.Material3.TitleMedium">
+        <item name="fontFamily">@font/inter_semibold</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">@color/seadrop_text_primary</item>
+    </style>
+
+    <style name="TextAppearance.SeaDrop.TitleSmall" parent="TextAppearance.Material3.TitleSmall">
+        <item name="fontFamily">@font/inter_medium</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/seadrop_text_secondary</item>
+    </style>
+
+    <style name="TextAppearance.SeaDrop.BodyLarge" parent="TextAppearance.Material3.BodyLarge">
+        <item name="fontFamily">@font/inter_regular</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">@color/seadrop_text_primary</item>
+    </style>
+
+    <style name="TextAppearance.SeaDrop.BodyMedium" parent="TextAppearance.Material3.BodyMedium">
+        <item name="fontFamily">@font/inter_regular</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/seadrop_text_secondary</item>
+    </style>
+
+    <style name="TextAppearance.SeaDrop.BodySmall" parent="TextAppearance.Material3.BodySmall">
+        <item name="fontFamily">@font/inter_regular</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/seadrop_text_muted</item>
+    </style>
+
+    <style name="TextAppearance.SeaDrop.LabelLarge" parent="TextAppearance.Material3.LabelLarge">
+        <item name="fontFamily">@font/inter_semibold</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/seadrop_on_primary</item>
+    </style>
+
+    <!-- Button Styles -->
+    <style name="Widget.SeaDrop.Button.Primary" parent="Widget.Material3.Button.ElevatedButton">
+        <item name="android:background">@drawable/btn_primary_background</item>
+        <item name="android:textColor">@color/seadrop_on_primary</item>
+        <item name="cornerRadius">16dp</item>
+        <item name="android:minHeight">56dp</item>
+        <item name="android:paddingHorizontal">28dp</item>
+        <item name="android:textAppearance">@style/TextAppearance.SeaDrop.LabelLarge</item>
+    </style>
+
+    <style name="Widget.SeaDrop.Button.Secondary" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="strokeColor">@color/seadrop_primary</item>
+        <item name="strokeWidth">1.5dp</item>
+        <item name="android:textColor">@color/seadrop_primary</item>
+        <item name="cornerRadius">16dp</item>
+        <item name="android:minHeight">56dp</item>
+        <item name="android:paddingHorizontal">28dp</item>
+        <item name="android:textAppearance">@style/TextAppearance.SeaDrop.LabelLarge</item>
+    </style>
+
+    <style name="Widget.SeaDrop.Button.Text" parent="Widget.Material3.Button.TextButton">
+        <item name="android:textColor">@color/seadrop_primary</item>
+        <item name="android:textAppearance">@style/TextAppearance.SeaDrop.LabelLarge</item>
+    </style>
+
+    <!-- TextInputLayout Style -->
+    <style name="Widget.SeaDrop.TextInputLayout" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+        <item name="boxStrokeColor">@color/seadrop_border</item>
+        <item name="boxStrokeWidth">1dp</item>
+        <item name="boxStrokeWidthFocused">2dp</item>
+        <item name="boxBackgroundColor">@color/seadrop_bg</item>
+        <item name="hintTextColor">@color/seadrop_text_muted</item>
+        <item name="android:textColorHint">@color/seadrop_text_muted</item>
+        <item name="android:textColor">@color/seadrop_text_primary</item>
+        <item name="boxCornerRadiusTopStart">12dp</item>
+        <item name="boxCornerRadiusTopEnd">12dp</item>
+        <item name="boxCornerRadiusBottomStart">12dp</item>
+        <item name="boxCornerRadiusBottomEnd">12dp</item>
+    </style>
+
+    <!-- Card Style - matches Windows dark card appearance -->
+    <style name="Widget.SeaDrop.Card" parent="Widget.Material3.CardView.Elevated">
+        <item name="cardBackgroundColor">@color/seadrop_surface</item>
+        <item name="strokeColor">@color/seadrop_border</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="cardCornerRadius">16dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="contentPadding">24dp</item>
+    </style>
+
+    <!-- Chip Style -->
+    <style name="Widget.SeaDrop.Chip" parent="Widget.Material3.Chip.Filter">
+        <item name="chipBackgroundColor">@color/seadrop_surface_variant</item>
+        <item name="android:textColor">@color/seadrop_text_primary</item>
+        <item name="chipCornerRadius">16dp</item>
+    </style>
+</resources>
