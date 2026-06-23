@@ -322,20 +322,20 @@ static void android_loop(int fd) {
             len = read_line(fd, line, sizeof(line));
             if (len < 0 || strcmp(line, "SEND_DONE") != 0) {
                 send_str(fd, "REJECT MISSING_DONE\n");
-            transfer::end_session();
-            continue;
-        }
+                transfer::end_session();
+                continue;
+            }
 
-        // Verify CRC32
-        if (transfer::verify_crc32(tid, size, crc)) {
-            xSemaphoreTake(g_state_mutex, portMAX_DELAY);
-            g_session.checksum_ok    = true;
-            g_session.upload_complete = true;
-            xSemaphoreGive(g_state_mutex);
-            send_str(fd, "ACK\n");
+            // Verify CRC32
+            if (transfer::verify_crc32(tid, size, crc)) {
+                xSemaphoreTake(g_state_mutex, portMAX_DELAY);
+                g_session.checksum_ok    = true;
+                g_session.upload_complete = true;
+                xSemaphoreGive(g_state_mutex);
+                send_str(fd, "ACK\n");
 
-            // Notify Windows via its TCP connection
-            int win_fd = s_windows_fd;
+                // Notify Windows via its TCP connection
+                int win_fd = s_windows_fd;
                 if (win_fd >= 0) {
                     char notify[512];
                     snprintf(notify, sizeof(notify), "NOTIFY %s %lu\n",
@@ -542,20 +542,20 @@ static void windows_loop(int fd) {
             len = read_line(fd, line, sizeof(line));
             if (len < 0 || strcmp(line, "SEND_DONE") != 0) {
                 send_str(fd, "REJECT MISSING_DONE\n");
-            transfer::end_session();
-            continue;
-        }
+                transfer::end_session();
+                continue;
+            }
 
-        // Verify CRC32
-        if (transfer::verify_crc32(tid, size, crc)) {
-            xSemaphoreTake(g_state_mutex, portMAX_DELAY);
-            g_session.checksum_ok    = true;
-            g_session.upload_complete = true;
-            xSemaphoreGive(g_state_mutex);
-            send_str(fd, "ACK\n");
+            // Verify CRC32
+            if (transfer::verify_crc32(tid, size, crc)) {
+                xSemaphoreTake(g_state_mutex, portMAX_DELAY);
+                g_session.checksum_ok    = true;
+                g_session.upload_complete = true;
+                xSemaphoreGive(g_state_mutex);
+                send_str(fd, "ACK\n");
 
-            // Notify Android via its TCP connection
-            int and_fd = s_android_fd;
+                // Notify Android via its TCP connection
+                int and_fd = s_android_fd;
                 if (and_fd >= 0) {
                     char notify[512];
                     snprintf(notify, sizeof(notify), "NOTIFY %s %lu\n",
